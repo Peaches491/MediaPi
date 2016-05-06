@@ -7,12 +7,9 @@ import sys
 import time
 
 from systemd import journal
-journal.send('Hello world')
-journal.send('Hello, again, world', FIELD2='Greetings!', FIELD3='Guten tag')
-journal.send('Binary message', BINARY=b'\xde\xad\xbe\xef')
 
 import lirc
-from wakeonlan import wol
+from pywakeonlan.wakeonlan import wol
 
 _MAC_ADDRESS    = "78:2B:CB:AF:22:EA"
 _IP_ADDRESS     = "192.168.1.30"
@@ -23,19 +20,24 @@ _UN_AND_ADDRESS = _USERNAME + '@' + _IP_ADDRESS
 verbose = "-v" in sys.argv
 repeat_time = 1.0
 
+def log_and_print(*args, **kwargs):
+    journal.send(*args, MESSAGE_ID="remote_wol")
+    if verbose:
+        print(*args, **kwargs)
+
 def init_ir():
-    if verbose: print("Init... ",)
+    log_and_print("Init... ",)
     sockid = lirc.init("remote_wol", blocking = False)
     time.sleep(1)
-    if verbose: print("Done.")
+    log_and_print("Done.")
 
 def power_tv(toggle_on=None):
-    if verbose: print("  Sending TV power!")
+    log_and_print("  Sending TV power!")
     os.system("irsend SEND_ONCE VizioTV KEY_POWER -# 10")
     time.sleep(0.2)
 
 def power_receiver(toggle_on=None):
-    if verbose: print("  Sending receiver power!")
+    log_and_print("  Sending receiver power!")
     os.system("irsend SEND_ONCE SonyReceiver KEY_POWER -# 10")
     time.sleep(0.2)
 
@@ -47,7 +49,7 @@ def power_pc(toggle_on=None):
             subprocess.check_output(["ssh", _UN_AND_ADDRESS, "\"poweroff\""],
                                     stderr=subprocess.STDOUT, timeout=2.0)
         except subprocess.TimeoutExpired as ex:
-            if verbose: print(ex)
+            log_and_print(str(ex))
     time.sleep(0.2)
 
 def check_pc_power():
@@ -57,7 +59,7 @@ def count_presses():
     press_start_time = time.time()
     press_end_time = time.time()
     counting = True
-    if verbose: print("Counting...")
+    log_and_print("Counting...")
 
     press_count = 1
 
@@ -67,12 +69,12 @@ def count_presses():
         if code:
             press_end_time = time.time()
             press_count += 1
-            if verbose: print("  Presses: " + str(press_count))
+            log_and_print("  Presses: " + str(press_count))
         elif time.time() - press_end_time > repeat_time:
-            if verbose: print("  Done.")
+            log_and_print("  Done.")
             counting = False
 
-    if verbose: print("Press count: ", press_count)
+    log_and_print("Press count: " + str(press_count))
     return press_count
 
 def process_code():
@@ -89,14 +91,14 @@ def process_code():
 
         # Power all on
         if press_count is 1:
-            if verbose: print("Powering on all!")
+            log_and_print("Powering on all!")
             power_tv()
             power_receiver()
             power_pc(True)
 
         # Power all off
         elif press_count is 2:
-            if verbose: print("Powering off all!")
+            log_and_print("Powering off all!")
             power_tv()
             power_receiver()
             power_pc(False)
@@ -106,7 +108,6 @@ def process_code():
             print("PC Power: ", check_pc_power())
             power_pc(not check_pc_power())
 
-
 def main():
     while True:
         init_ir()
@@ -114,8 +115,6 @@ def main():
             process_code()
         except lirc.NextCodeError as ex:
             print(ex)
-
-
 
 if __name__ == "__main__":
     main()
